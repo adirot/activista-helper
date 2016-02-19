@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import facebook
 import datetime
 import codecs  # for russian character
@@ -6,14 +7,41 @@ import webbrowser
 __author__ = 'adiro'
 
 
-def get_all_user_events(access_token):
+def get_all_future_user_events(access_token):
     graph = facebook.GraphAPI(access_token = access_token)
     profile = graph.get_object('me')
     events_rsvpd = graph.get_connections(profile['id'], 'events')
-    events_not_replied = graph.get_connections(profile['id'], 'events/not_replied')
-    events_created = graph.get_connections(profile['id'], 'events/created')
-    events_maybe = graph.get_connections(profile['id'], 'events/maybe')
-    return events_rsvpd['data'] + events_not_replied['data'] + events_created['data'] + events_maybe['data']
+    events_not_replied = graph.get_connections(profile['id'], 'events/not_replied/?since=now')
+    events_created = graph.get_connections(profile['id'], 'events/created?since=now')
+    events_maybe = graph.get_connections(profile['id'], 'events/maybe?since=now')
+    events_liked_pages = get_liked_pages_future_events(access_token)
+    all_events = events_rsvpd['data'] + events_not_replied['data'] + events_created['data'] + \
+        events_maybe['data'] + events_liked_pages
+
+    # delete duplicates
+    seen = set()
+    new_events = []
+    for d in all_events:
+        t = tuple(d.items())
+        if t not in seen:
+            seen.add(t)
+            new_events.append(d)
+
+    return new_events
+
+
+def get_liked_pages_future_events(access_token):
+    graph = facebook.GraphAPI(access_token = access_token)
+    profile = graph.get_object('me')
+    liked_pages = graph.get_connections(profile['id'], 'likes?limit=10000')
+    liked_pages = liked_pages['data']
+    events_liked_pages = []
+    for page in liked_pages:
+        events_liked_page = graph.get_connections(page['id'], 'events?since=now')
+        events_liked_page = events_liked_page['data']
+        if events_liked_page:  # page has events
+            events_liked_pages = events_liked_pages + events_liked_page[:]
+    return events_liked_pages
 
 
 def parse_event_time(events):
@@ -45,7 +73,7 @@ def sort(events):
 
 
 def get_event_info2txt_file(access_token, num_of_days_ahead):
-    events = get_all_user_events(access_token)
+    events = get_all_future_user_events(access_token)
     events = parse_event_time(events)
     events = events_in_the_next_num_day(num_of_days_ahead, events)
     events = sort(events)
@@ -66,7 +94,9 @@ def get_event_info2txt_file(access_token, num_of_days_ahead):
     info_file.close()
     return info_file
 
-access_token = input("go to https://developers.facebook.com/tools/explorer/ . press 'get user access token. mark the checkbox user_events, and pres 'get access token'. copy and paste the access token here (the long list of letters and numbers: ")
-days = input('This will get all the events in the next days. How me days ahead do you want?')
-get_event_info2txt_file(access_token,int(days))
+#access_token = input("go to https://developers.facebook.com/tools/explorer/ . press 'get user access token. mark the checkbox user_events, and pres 'get access token'. copy and paste the access token here (the long list of letters and numbers: ")
+#days = input('This will get all the events in the next days. How me days ahead do you want?')
+access_token = 'CAACEdEose0cBAJuRmOqgCuFmWWblvAHiFgTOZCXGucFJ9i1iNjqT1tHxOhTEhwFSxzcFjS6XEseAAqeDpW8xcNzVesqs5Gti7JCoZChZCVi3YSn7s7syu6I1KNAI0f27paWfCkQhPOZBUAP1TZAbME6rlHuZA0NtlmVDRqmeNZAQt97mZC3f5UMgJRAnZAtKc7YZBJNforcP0QyAZDZD'
+days = 8
+get_event_info2txt_file(access_token, int(days))
 webbrowser.open("info_file")
